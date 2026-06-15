@@ -1,0 +1,76 @@
+﻿# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 环境变量（包含敏感信息，绝对不能上传）
+.env
+# 但保留 .env.example 作为模板供他人参考
+
+# ========================
+# Node.js / Frontend
+# ========================
+node_modules/
+frontend/dist/
+frontend/node_modules/.vite/
+
+# ========================
+# IDE / 编辑器
+# ========================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ========================
+# 操作系统
+# ========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ========================
+# 项目运行时数据
+# ========================
+# YOLO 训练/预测输出
+runs/
+backend/runs/
+
+# 上传文件和结果文件（运行时生成）
+backend/app/static/uploads/*
+backend/app/static/results/*
+# 但保留目录结构
+!backend/app/static/uploads/.gitkeep
+!backend/app/static/results/.gitkeep
+
+# 数据集（通常很大，不应上传）
+datasets/
+
+# ========================
+# 备份文件
+# ========================
+backup/
+
+# ========================
+# 日志
+# ========================
+*.log
+logs/
+
+# ========================
+# Jupyter Notebook
+# ========================
+.ipynb_checkpoints/
