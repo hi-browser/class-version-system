@@ -10,6 +10,12 @@
         <el-form-item prop="password">
           <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password />
         </el-form-item>
+        <el-form-item prop="role">
+          <el-radio-group v-model="form.role" style="width: 100%">
+            <el-radio-button value="teacher">教师</el-radio-button>
+            <el-radio-button value="admin">管理员</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="handleLogin" style="width: 100%">登 录</el-button>
         </el-form-item>
@@ -30,7 +36,7 @@ import { login } from '../api'
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
-const form = ref({ email: '', password: '' })
+const form = ref({ email: '', password: '', role: 'teacher' })
 const rules = {
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
@@ -39,6 +45,9 @@ const rules = {
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+  ],
+  role: [
+    { required: true, message: '请选择身份', trigger: 'change' }
   ]
 }
 

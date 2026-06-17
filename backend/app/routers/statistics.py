@@ -4,17 +4,31 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db
 from app.models.class_session import ClassSession
+from app.models.course import Course
+from app.models.user import User
+from app.routers.auth import get_current_user
 
 router = APIRouter()
 
-@router.get("/overview")
-def overview(db: Session = Depends(get_db)):
-    total_sessions = db.query(func.count(ClassSession.id)).scalar() or 0
-    avg_attendance = db.query(func.avg(ClassSession.attendance_rate)).scalar() or 0
-    avg_participation = db.query(func.avg(ClassSession.participation_rate)).scalar() or 0
-    avg_abnormal = db.query(func.avg(ClassSession.abnormal_rate)).scalar() or 0
+def _teacher_filter(db: Session, current_user: User):
+    if current_user.role == "teacher":
+        teacher_course_ids = (
+            db.query(Course.id)
+            .filter(Course.teacher_id == current_user.id)
+            .subquery()
+        )
+        return ClassSession.course_id.in_(teacher_course_ids)
+    return True
 
-    recent = db.query(ClassSession).order_by(ClassSession.id.desc()).limit(10).all()
+@router.get("/overview")
+def overview(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    base_q = db.query(ClassSession).filter(_teacher_filter(db, current_user))
+    total_sessions = base_q.with_entities(func.count(ClassSession.id)).scalar() or 0
+    avg_attendance = base_q.with_entities(func.avg(ClassSession.attendance_rate)).scalar() or 0
+    avg_participation = base_q.with_entities(func.avg(ClassSession.participation_rate)).scalar() or 0
+    avg_abnormal = base_q.with_entities(func.avg(ClassSession.abnormal_rate)).scalar() or 0
+
+    recent = base_q.order_by(ClassSession.id.desc()).limit(10).all()
     return {
         "total_sessions": total_sessions,
         "avg_attendance": round(float(avg_attendance), 2),
@@ -33,8 +47,8 @@ def overview(db: Session = Depends(get_db)):
     }
 
 @router.get("/behavior-summary")
-def behavior_summary(db: Session = Depends(get_db)):
-    sessions = db.query(ClassSession).all()
+def behavior_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sessions = db.query(ClassSession).filter(_teacher_filter(db, current_user)).all()
     merged = {}
     for s in sessions:
         if not s.behavior_json:
@@ -49,8 +63,8 @@ def behavior_summary(db: Session = Depends(get_db)):
     return [{"name": k, "value": v} for k, v in merged.items()]
 
 @router.get("/attendance-trend")
-def attendance_trend(db: Session = Depends(get_db)):
-    sessions = db.query(ClassSession).order_by(ClassSession.session_time.asc()).limit(30).all()
+def attendance_trend(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sessions = db.query(ClassSession).filter(_teacher_filter(db, current_user)).order_by(ClassSession.session_time.asc()).limit(30).all()
     return [
         {
             "id": s.id,
@@ -68,8 +82,9 @@ def attendance_trend_filtered(
     course_id: int | None = None,
     class_id: int | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    q = db.query(ClassSession).order_by(ClassSession.session_time.asc())
+    q = db.query(ClassSession).filter(_teacher_filter(db, current_user)).order_by(ClassSession.session_time.asc())
     if course_id:
         q = q.filter(ClassSession.course_id == course_id)
     if class_id:

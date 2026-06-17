@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, func
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
 from app.core.database import Base
 
 class ClassGroup(Base):
@@ -9,4 +9,5 @@ class ClassGroup(Base):
     expected_count = Column(Integer, nullable=False, default=0)
     major = Column(String(100), nullable=True)
     grade = Column(String(50), nullable=True)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
