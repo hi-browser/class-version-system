@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routers import course, class_group, session, upload, statistics, behavior_category
+from app.routers import course, class_group, session, upload, statistics, behavior_category, auth
 
 Base.metadata.create_all(bind=engine)
 
@@ -27,6 +27,7 @@ app.include_router(session.router, prefix="/api/sessions", tags=["课堂记录"]
 app.include_router(upload.router, prefix="/api/upload", tags=["上传分析"])
 app.include_router(statistics.router, prefix="/api/statistics", tags=["统计分析"])
 app.include_router(behavior_category.router, prefix="/api/behavior-categories", tags=["行为类别"])
+app.include_router(auth.router, prefix="/api/auth", tags=["用户认证"])
 
 @app.get("/")
 def root():

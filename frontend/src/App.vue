@@ -1,5 +1,8 @@
 <template>
-  <el-container class="layout">
+  <div v-if="$route.meta.noAuth" class="auth-only">
+    <router-view />
+  </div>
+  <el-container v-else class="layout">
     <el-aside width="240px" class="side">
       <div class="brand">
         <div class="logo">CV</div>
@@ -19,7 +22,10 @@
     <el-container>
       <el-header class="header">
         <div class="page-title">{{ $route.meta.title }}</div>
-        <div class="user">教师端 · PC访问</div>
+        <div class="user">
+          <span v-if="userEmail">{{ userEmail }}</span>
+          <el-button type="danger" text size="small" @click="handleLogout">退出登录</el-button>
+        </div>
       </el-header>
       <el-main class="main">
         <router-view />
@@ -27,3 +33,30 @@
     </el-container>
   </el-container>
 </template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+const userEmail = ref('')
+
+onMounted(() => {
+  const user = localStorage.getItem('user')
+  if (user) {
+    userEmail.value = JSON.parse(user).email
+  }
+})
+
+function handleLogout() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  router.replace('/login')
+}
+</script>
+
+<style scoped>
+.auth-only {
+  min-height: 100vh;
+}
+</style>

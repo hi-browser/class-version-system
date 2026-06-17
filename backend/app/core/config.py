@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     FRAME_INTERVAL_SECONDS: int = 2
     CONF_THRESHOLD: float = 0.25
 
+    SMTP_HOST: str = "smtp.163.com"
+    SMTP_PORT: int = 465
+    SMTP_USER: str = "your_email@163.com"  # ← 占位符
+    SMTP_PASSWORD: str = "your_auth_code"  # ← 占位符
+    SMTP_FROM: str = "your_email@163.com"  # ← 占位符
+    JWT_SECRET: str = "classroom-vision-jwt-secret-key-2025"  # 签名密钥
+    JWT_ALGORITHM: str = "HS256"  # 签名算法
+    JWT_EXPIRE_MINUTES: int = 60 * 24  # 令牌有效期（分钟）
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property

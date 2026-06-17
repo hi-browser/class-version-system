@@ -29,3 +29,7 @@ export const getSession = id => http.get(`/api/sessions/${id}`)
 export const getSessionAnalysis = id => http.get(`/api/sessions/${id}/analysis`)
 export const deleteSession = id => http.delete(`/api/sessions/${id}`)
 export const getBehaviorCategories = () => http.get('/api/behavior-categories')
+
+export const login = data => http.post('/api/auth/login', data)
+export const register = data => http.post('/api/auth/register', data)
+export const getCurrentUser = () => http.get('/api/auth/me')
