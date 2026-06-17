@@ -17,7 +17,7 @@ const routes = [
   { path: '/history', component: SessionHistory, meta: { title: '历史课堂' } },
   { path: '/courses', component: CourseManage, meta: { title: '课程管理' } },
   { path: '/classes', component: ClassManage, meta: { title: '班级管理' } },
-  { path: '/categories', component: BehaviorCategories, meta: { title: '行为类别' } }
+  { path: '/categories', component: BehaviorCategories, meta: { title: '行为类别', adminOnly: true } }
 ]
 
 const router = createRouter({
@@ -27,9 +27,13 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+
   if (!to.meta.noAuth && !token) {
     next('/login')
   } else if (to.meta.noAuth && token) {
+    next('/dashboard')
+  } else if (to.meta.adminOnly && user.role !== 'admin') {
     next('/dashboard')
   } else {
     next()

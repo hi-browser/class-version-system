@@ -1,4 +1,8 @@
 import pymysql
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+admin_password_hash = pwd_context.hash("admin123")
 
 conn = pymysql.connect(
     host="127.0.0.1",
@@ -11,15 +15,22 @@ conn = pymysql.connect(
 
 try:
     with conn.cursor() as cursor:
-        # 清空已有数据，避免乱码残留
         cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
         cursor.execute("TRUNCATE TABLE class_session;")
         cursor.execute("TRUNCATE TABLE behavior_category;")
         cursor.execute("TRUNCATE TABLE class_group;")
         cursor.execute("TRUNCATE TABLE course;")
+        cursor.execute("TRUNCATE TABLE users;")
         cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
 
-        # 插入课程
+        cursor.execute(
+            """
+            INSERT INTO users(email, name, password_hash, role, is_verified)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            ("admin@example.com", "系统管理员", admin_password_hash, "admin", True)
+        )
+
         cursor.executemany(
             """
             INSERT INTO course(course_name, teacher_name, description)
@@ -31,7 +42,6 @@ try:
             ]
         )
 
-        # 插入班级
         cursor.executemany(
             """
             INSERT INTO class_group(class_name, expected_count, major, grade)
@@ -43,7 +53,6 @@ try:
             ]
         )
 
-        # 插入行为类别
         cursor.executemany(
             """
             INSERT INTO behavior_category(class_id, code, name_cn, is_positive)
@@ -60,7 +69,8 @@ try:
         )
 
     conn.commit()
-    print("数据库中文初始化数据修复完成。")
+    print("数据库初始化数据修复完成。")
+    print("默认管理员账号: admin@example.com / admin123")
 
 finally:
     conn.close()

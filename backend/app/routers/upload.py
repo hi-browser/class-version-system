@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.class_session import ClassSession
+from app.models.course import Course
+from app.models.user import User
+from app.routers.auth import get_current_user
 from app.services.file_service import save_upload_file
 from app.cv.analyzer import analyzer
 
@@ -18,7 +21,13 @@ async def upload_and_analyze(
     expected_count: int = Form(0),
     session_time: str | None = Form(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    if current_user.role == "teacher" and course_id:
+        course = db.get(Course, course_id)
+        if not course or course.teacher_id != current_user.id:
+            raise HTTPException(403, "只能上传自己所教课程的分析")
+
     try:
         file_path, source_type = await save_upload_file(file)
         result = analyzer.analyze_file(file_path, source_type, expected_count)

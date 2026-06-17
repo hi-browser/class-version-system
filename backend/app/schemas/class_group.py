@@ -6,6 +6,7 @@ class ClassGroupBase(BaseModel):
     expected_count: int = 0
     major: Optional[str] = None
     grade: Optional[str] = None
+    teacher_id: Optional[int] = None
 
 class ClassGroupCreate(ClassGroupBase):
     pass

@@ -7,13 +7,28 @@ DROP TABLE IF EXISTS class_session;
 DROP TABLE IF EXISTS behavior_category;
 DROP TABLE IF EXISTS class_group;
 DROP TABLE IF EXISTS course;
+DROP TABLE IF EXISTS users;
+
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(128) NOT NULL,
+  name VARCHAR(64) NOT NULL DEFAULT '',
+  password_hash VARCHAR(256) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'teacher',
+  is_verified BOOLEAN DEFAULT FALSE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_email (email),
+  UNIQUE KEY uq_email_role (email, role)
+);
 
 CREATE TABLE course (
   id INT PRIMARY KEY AUTO_INCREMENT,
   course_name VARCHAR(100) NOT NULL,
   teacher_name VARCHAR(100),
+  teacher_id INT NULL,
   description TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_course_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE class_group (
@@ -22,7 +37,9 @@ CREATE TABLE class_group (
   expected_count INT NOT NULL DEFAULT 0,
   major VARCHAR(100),
   grade VARCHAR(50),
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  teacher_id INT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_class_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE behavior_category (

@@ -4,6 +4,7 @@ from typing import Optional
 class CourseBase(BaseModel):
     course_name: str
     teacher_name: Optional[str] = None
+    teacher_id: Optional[int] = None
     description: Optional[str] = None
 
 class CourseCreate(CourseBase):
