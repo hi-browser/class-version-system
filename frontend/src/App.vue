@@ -10,7 +10,6 @@
       </div>
       <el-menu router :default-active="$route.path" class="menu">
         <el-menu-item index="/dashboard"><el-icon><DataAnalysis /></el-icon><span>数据看板</span></el-menu-item>
-        <el-menu-item index="/upload"><el-icon><Upload /></el-icon><span>上传分析</span></el-menu-item>
         <el-menu-item index="/history"><el-icon><Clock /></el-icon><span>历史课堂</span></el-menu-item>
         <el-menu-item index="/courses"><el-icon><Reading /></el-icon><span>课程管理</span></el-menu-item>
         <el-menu-item index="/classes"><el-icon><School /></el-icon><span>班级管理</span></el-menu-item>

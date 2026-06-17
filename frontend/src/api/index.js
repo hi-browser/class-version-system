@@ -3,6 +3,12 @@ import http from './http'
 export const getOverview = () => http.get('/api/statistics/overview')
 export const getBehaviorSummary = () => http.get('/api/statistics/behavior-summary')
 export const getAttendanceTrend = () => http.get('/api/statistics/attendance-trend')
+export const getTrendByClassCourse = (courseId, classId) => {
+  const params = {}
+  if (courseId) params.course_id = courseId
+  if (classId) params.class_id = classId
+  return http.get('/api/statistics/attendance-trend/filter', { params })
+}
 
 export const getCourses = () => http.get('/api/courses')
 export const createCourse = data => http.post('/api/courses', data)

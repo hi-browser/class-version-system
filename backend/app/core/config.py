@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "app/static/uploads"
     RESULT_DIR: str = "app/static/results"
     MODEL_PATH: str = "weights/scb_yolo.pt"
-    MOCK_ANALYSIS: bool = True
+    MOCK_ANALYSIS: bool = False
     FRAME_INTERVAL_SECONDS: int = 2
     CONF_THRESHOLD: float = 0.25
 

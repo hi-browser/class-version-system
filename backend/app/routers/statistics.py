@@ -50,11 +50,35 @@ def behavior_summary(db: Session = Depends(get_db)):
 
 @router.get("/attendance-trend")
 def attendance_trend(db: Session = Depends(get_db)):
-    sessions = db.query(ClassSession).order_by(ClassSession.created_at.asc()).limit(30).all()
+    sessions = db.query(ClassSession).order_by(ClassSession.session_time.asc()).limit(30).all()
     return [
         {
             "id": s.id,
-            "time": s.created_at.strftime("%m-%d %H:%M") if s.created_at else str(s.id),
+            "time": s.session_time.strftime("%m-%d %H:%M") if s.session_time else (s.created_at.strftime("%m-%d %H:%M") if s.created_at else str(s.id)),
+            "attendance_rate": s.attendance_rate,
+            "participation_rate": s.participation_rate,
+            "abnormal_rate": s.abnormal_rate,
+        }
+        for s in sessions
+    ]
+
+
+@router.get("/attendance-trend/filter")
+def attendance_trend_filtered(
+    course_id: int | None = None,
+    class_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    q = db.query(ClassSession).order_by(ClassSession.session_time.asc())
+    if course_id:
+        q = q.filter(ClassSession.course_id == course_id)
+    if class_id:
+        q = q.filter(ClassSession.class_id == class_id)
+    sessions = q.limit(50).all()
+    return [
+        {
+            "id": s.id,
+            "time": s.session_time.strftime("%m-%d %H:%M") if s.session_time else (s.created_at.strftime("%m-%d %H:%M") if s.created_at else str(s.id)),
             "attendance_rate": s.attendance_rate,
             "participation_rate": s.participation_rate,
             "abnormal_rate": s.abnormal_rate,
