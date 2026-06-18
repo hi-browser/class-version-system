@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     FRAME_INTERVAL_SECONDS: int = 2
     CONF_THRESHOLD: float = 0.25
     PERSON_CONF_THRESHOLD: float = 0.25
+    TRACKING_ENABLED: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

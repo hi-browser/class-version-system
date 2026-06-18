@@ -21,9 +21,7 @@ except Exception:
 class ClassroomAnalyzer:
     def __init__(self):
         self.model = None
-        self._person_model = None
         self.model_path = Path(settings.MODEL_PATH)
-        self._person_model_path = Path(settings.PERSON_MODEL_PATH)
         self.result_dir = Path(settings.RESULT_DIR)
         self.result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -38,80 +36,55 @@ class ClassroomAnalyzer:
             self.model = YOLO(str(self.model_path))
         return self.model
 
-    def _load_person_model(self):
-        if settings.MOCK_ANALYSIS:
-            return None
-        if YOLO is None:
-            raise RuntimeError("未安装 ultralytics")
-        if self._person_model_path.exists():
-            if self._person_model is None:
-                self._person_model = YOLO(str(self._person_model_path))
-            return self._person_model
-        return None
+    def _detect_frame(self, image: np.ndarray, use_tracking: bool = False) -> tuple:
+        model = self._load_model()
+        if use_tracking:
+            results = model.track(
+                source=image,
+                conf=settings.CONF_THRESHOLD,
+                persist=True,
+                tracker="bytetrack.yaml",
+                save=False,
+                verbose=False,
+            )
+        else:
+            results = model.predict(
+                source=image, conf=settings.CONF_THRESHOLD, save=False, verbose=False
+            )
 
-    def _detect_persons(self, image: np.ndarray) -> List[tuple]:
-        person_model = self._load_person_model()
-        if person_model is None:
-            return []
-        results = person_model.predict(source=image, conf=settings.PERSON_CONF_THRESHOLD, save=False, verbose=False)
-        boxes = []
-        for r in results:
-            if r.boxes is None:
-                continue
-            for box in r.boxes:
-                x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
-                conf = float(box.conf[0].item())
-                boxes.append((x1, y1, x2, y2, conf))
-        return boxes
+        behavior_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
+        detections = []
 
-    def _classify_crop(self, crop: np.ndarray) -> tuple:
-        behavior_model = self._load_model()
-        if crop.shape[0] < 10 or crop.shape[1] < 10:
-            return (None, 0)
-        results = behavior_model.predict(source=crop, conf=settings.CONF_THRESHOLD, save=False, verbose=False)
-        best_cls = None
-        best_conf = 0
         for r in results:
             if r.boxes is None:
                 continue
             for box in r.boxes:
                 cls_id = int(box.cls[0].item())
                 conf = float(box.conf[0].item())
-                if conf > best_conf:
-                    best_conf = conf
-                    best_cls = cls_id
-        return (best_cls, best_conf)
+                x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+                track_id = None
+                if use_tracking and box.id is not None:
+                    track_id = int(box.id[0].item())
 
-    def _process_frame(self, image: np.ndarray, frame_index: int = 0) -> tuple:
-        person_boxes = self._detect_persons(image)
-        if not person_boxes:
-            return (image, {}, [])
+                if cls_id not in CLASS_NAMES:
+                    continue
 
-        behavior_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
-        detections = []
+                behavior_counts[str(cls_id)] = behavior_counts.get(str(cls_id), 0) + 1
+                det = {
+                    "class_id": cls_id,
+                    "class_name": CLASS_NAMES.get(cls_id, f"class_{cls_id}"),
+                    "name_cn": CLASS_CN.get(cls_id, f"类别{cls_id}"),
+                    "confidence": round(conf, 4),
+                    "bbox": [x1, y1, x2, y2],
+                }
+                if track_id is not None:
+                    det["track_id"] = track_id
+                detections.append(det)
 
-        for (x1, y1, x2, y2, person_conf) in person_boxes:
-            x1_c = max(0, x1)
-            y1_c = max(0, y1)
-            x2_c = min(image.shape[1], x2)
-            y2_c = min(image.shape[0], y2)
-            crop = image[y1_c:y2_c, x1_c:x2_c]
-            if crop.size == 0:
-                continue
-
-            cls_id, cls_conf = self._classify_crop(crop)
-            if cls_id is None:
-                continue
-
-            behavior_counts[str(cls_id)] = behavior_counts.get(str(cls_id), 0) + 1
-            detections.append({
-                "class_id": cls_id,
-                "class_name": CLASS_NAMES.get(cls_id, f"class_{cls_id}"),
-                "name_cn": CLASS_CN.get(cls_id, f"类别{cls_id}"),
-                "confidence": round(cls_conf, 4),
-                "bbox": [x1, y1, x2, y2],
-            })
-            self._draw_box(image, x1, y1, x2, y2, CLASS_CN.get(cls_id, str(cls_id)), cls_conf)
+                label = CLASS_CN.get(cls_id, str(cls_id))
+                if track_id is not None:
+                    label = f"ID{track_id} {label}"
+                self._draw_box(image, x1, y1, x2, y2, label, conf)
 
         return (image, behavior_counts, detections)
 
@@ -130,7 +103,7 @@ class ClassroomAnalyzer:
         if image is None:
             raise RuntimeError("图片读取失败")
 
-        _, behavior_counts, detections = self._process_frame(image)
+        _, behavior_counts, detections = self._detect_frame(image)
 
         result_path = self._save_result_image(image, image_path)
         return self._build_summary(
@@ -152,10 +125,12 @@ class ClassroomAnalyzer:
         interval = max(1, int(fps * settings.FRAME_INTERVAL_SECONDS))
         frame_index = 0
         trend = []
-        total_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
         first_result_path = None
         sampled_frames = 0
         annotated_frames = []
+
+        track_behaviors = {}
+        track_max_conf = {}
 
         while True:
             ok, frame = cap.read()
@@ -166,10 +141,17 @@ class ClassroomAnalyzer:
                 continue
 
             sampled_frames += 1
-            frame, frame_counts, _ = self._process_frame(frame, frame_index)
+            frame, frame_counts, frame_dets = self._detect_frame(frame, use_tracking=settings.TRACKING_ENABLED)
 
-            for k, v in frame_counts.items():
-                total_counts[k] = total_counts.get(k, 0) + v
+            for det in frame_dets:
+                tid = det.get("track_id")
+                if tid is not None:
+                    if tid not in track_behaviors:
+                        track_behaviors[tid] = []
+                        track_max_conf[tid] = 0
+                    track_behaviors[tid].append(det["class_id"])
+                    if det["confidence"] > track_max_conf[tid]:
+                        track_max_conf[tid] = det["confidence"]
 
             annotated_frames.append(frame.copy())
 
@@ -198,27 +180,34 @@ class ClassroomAnalyzer:
         if annotated_frames:
             result_video_path = self._save_result_video(annotated_frames, video_path, fps, width, height, frame_repeat=interval)
 
-        if trend:
-            avg_count = round(sum(item["detected_count"] for item in trend) / len(trend))
+        if track_behaviors:
+            unique_count = len(track_behaviors)
+            behavior_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
+            for tid, behaviors in track_behaviors.items():
+                mode_behavior = max(set(behaviors), key=behaviors.count)
+                behavior_counts[str(mode_behavior)] = behavior_counts.get(str(mode_behavior), 0) + 1
+        elif trend:
+            unique_count = round(sum(item["detected_count"] for item in trend) / len(trend))
+            behavior_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
+            for item in trend:
+                for k, v in item["behaviors"].items():
+                    behavior_counts[k] = behavior_counts.get(k, 0) + v
+            if sampled_frames > 0:
+                for k in behavior_counts:
+                    behavior_counts[k] = round(behavior_counts[k] / sampled_frames)
         else:
-            avg_count = 0
-
-        avg_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
-        if sampled_frames > 0:
-            for k, v in total_counts.items():
-                avg_counts[k] = round(v / sampled_frames)
-        else:
-            avg_counts = total_counts
+            unique_count = 0
+            behavior_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
 
         summary = self._build_summary(
             expected_count=expected_count,
-            behavior_counts=avg_counts,
+            behavior_counts=behavior_counts,
             result_path=first_result_path,
             detections=[],
             trend=trend
         )
-        summary["detected_count"] = avg_count
-        summary["attendance_rate"] = self._rate(avg_count, expected_count)
+        summary["detected_count"] = unique_count
+        summary["attendance_rate"] = self._rate(unique_count, expected_count)
         summary["result_video_path"] = result_video_path
         return summary
 
