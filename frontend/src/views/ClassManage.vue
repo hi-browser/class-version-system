@@ -7,11 +7,9 @@
       </div>
     </template>
     <el-table :data="rows">
-      <el-table-column prop="class_name" label="班级名称" />
-      <el-table-column prop="expected_count" label="应到人数" />
-      <el-table-column prop="major" label="专业" />
-      <el-table-column prop="grade" label="年级" />
-      <el-table-column prop="teacher_name" label="授课教师" />
+      <el-table-column prop="course_name" label="课程名称" />
+      <el-table-column prop="teacher_name" label="任课教师" />
+      <el-table-column prop="student_count" label="班级人数" />
       <el-table-column v-if="isAdmin" label="操作" width="150">
         <template #default="{ row }">
           <el-button link type="primary" @click="open(row)">编辑</el-button>
@@ -23,14 +21,16 @@
 
   <el-dialog v-model="visible" title="班级信息">
     <el-form label-width="90px">
-      <el-form-item label="班级名称"><el-input v-model="form.class_name" /></el-form-item>
-      <el-form-item label="应到人数"><el-input-number v-model="form.expected_count" :min="0" /></el-form-item>
-      <el-form-item label="专业"><el-input v-model="form.major" /></el-form-item>
-      <el-form-item label="年级"><el-input v-model="form.grade" /></el-form-item>
-      <el-form-item label="授课教师">
-        <el-select v-model="form.teacher_id" placeholder="请选择教师" clearable style="width:100%">
-          <el-option v-for="t in teachers" :key="t.id" :label="t.name" :value="t.id" />
+      <el-form-item label="课程名称">
+        <el-input v-model="form.course_name" placeholder="如：高等数学" />
+      </el-form-item>
+      <el-form-item label="任课教师">
+        <el-select v-model="form.teacher_id" placeholder="选择教师" style="width:100%">
+          <el-option v-for="t in teachers" :key="t.id" :label="t.name + ' (' + t.email + ')'" :value="t.id" />
         </el-select>
+      </el-form-item>
+      <el-form-item label="班级人数">
+        <el-input-number v-model="form.student_count" :min="0" />
       </el-form-item>
     </el-form>
     <template #footer><el-button @click="visible=false">取消</el-button><el-button type="primary" @click="save">保存</el-button></template>
@@ -53,25 +53,20 @@ async function load() {
   if (isAdmin.value) {
     try { teachers.value = await getTeachers() } catch {}
   }
-  const teacherMap = {}
-  teachers.value.forEach(t => { teacherMap[t.id] = t.name })
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
-  rows.value = rows.value.map(c => ({ ...c, teacher_name: teacherMap[c.teacher_id] || (c.teacher_id === currentUser.id ? currentUser.name : '') }))
 }
 function open(row) {
-  form.value = row ? { ...row } : { class_name: '', expected_count: 0, major: '', grade: '', teacher_id: null }
+  form.value = row ? { ...row } : { course_name: '', teacher_id: null, student_count: 0 }
   visible.value = true
 }
 async function save() {
-  const payload = { ...form.value }
   if (form.value.id) {
-    await updateClass(form.value.id, payload)
+    await updateClass(form.value.id, form.value)
   } else {
-    await createClass(payload)
+    await createClass(form.value)
   }
   visible.value = false
-  load()
+  await load()
 }
-async function remove(id) { await deleteClass(id); load() }
+async function remove(id) { await deleteClass(id); await load() }
 onMounted(load)
 </script>

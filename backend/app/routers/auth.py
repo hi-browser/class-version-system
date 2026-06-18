@@ -96,17 +96,12 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     if email is None:
         return """<html><head><meta charset="utf-8"></head><body style="text-align:center;padding-top:80px;font-family:Arial">
         <h2 style="color:#f56c6c">验证链接已过期或无效</h2><p>请重新注册或请求新的验证邮件</p></body></html>"""
-    user = db.query(User).filter(User.email == email, User.role == "admin").first()
-    if user is None:
-        return """<html><head><meta charset="utf-8"></head><body style="text-align:center;padding-top:80px;font-family:Arial">
-        <h2 style="color:#f56c6c">用户不存在</h2></body></html>"""
-    if user.is_verified:
+    users = db.query(User).filter(User.email == email, User.is_verified == False).all()
+    if not users:
         return """<html><head><meta charset="utf-8"></head><body style="text-align:center;padding-top:80px;font-family:Arial">
         <h2 style="color:#67c23a">邮箱已验证</h2><p>无需重复验证，请前往登录</p></body></html>"""
-    user.is_verified = True
-    teacher = db.query(User).filter(User.email == email, User.role == "teacher").first()
-    if teacher and not teacher.is_verified:
-        teacher.is_verified = True
+    for u in users:
+        u.is_verified = True
     db.commit()
     return """<html><head><meta charset="utf-8"></head><body style="text-align:center;padding-top:80px;font-family:Arial">
     <h2 style="color:#67c23a">验证成功</h2><p>邮箱验证完成，请关闭此页面返回系统登录</p></body></html>"""

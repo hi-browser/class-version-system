@@ -3,6 +3,8 @@ import http from './http'
 export const getOverview = () => http.get('/api/statistics/overview')
 export const getBehaviorSummary = () => http.get('/api/statistics/behavior-summary')
 export const getAttendanceTrend = () => http.get('/api/statistics/attendance-trend')
+export const getVideoTrend = () => http.get('/api/statistics/video-trend')
+export const getTrend = getAttendanceTrend
 export const getTrendByClassCourse = (courseId, classId) => {
   const params = {}
   if (courseId) params.course_id = courseId
@@ -11,6 +13,7 @@ export const getTrendByClassCourse = (courseId, classId) => {
 }
 
 export const getCourses = () => http.get('/api/courses')
+export const getLocations = () => http.get('/api/courses/locations')
 export const createCourse = data => http.post('/api/courses', data)
 export const updateCourse = (id, data) => http.put(`/api/courses/${id}`, data)
 export const deleteCourse = id => http.delete(`/api/courses/${id}`)
@@ -20,9 +23,7 @@ export const createClass = data => http.post('/api/classes', data)
 export const updateClass = (id, data) => http.put(`/api/classes/${id}`, data)
 export const deleteClass = id => http.delete(`/api/classes/${id}`)
 
-export const uploadAnalyze = form => http.post('/api/upload/analyze', form, {
-  headers: { 'Content-Type': 'multipart/form-data' }
-})
+export const uploadAnalyze = form => http.post('/api/upload/analyze', form)
 
 export const getSessions = params => http.get('/api/sessions', { params })
 export const getSession = id => http.get(`/api/sessions/${id}`)

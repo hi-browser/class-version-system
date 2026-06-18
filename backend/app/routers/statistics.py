@@ -5,6 +5,7 @@ from sqlalchemy import func
 from app.core.database import get_db
 from app.models.class_session import ClassSession
 from app.models.course import Course
+from app.models.class_group import ClassGroup
 from app.models.user import User
 from app.routers.auth import get_current_user
 
@@ -12,9 +13,14 @@ router = APIRouter()
 
 def _teacher_filter(db: Session, current_user: User):
     if current_user.role == "teacher":
+        teacher_class_ids = (
+            db.query(ClassGroup.id)
+            .filter(ClassGroup.teacher_id == current_user.id)
+            .subquery()
+        )
         teacher_course_ids = (
             db.query(Course.id)
-            .filter(Course.teacher_id == current_user.id)
+            .filter(Course.class_group_id.in_(teacher_class_ids))
             .subquery()
         )
         return ClassSession.course_id.in_(teacher_course_ids)
@@ -75,6 +81,32 @@ def attendance_trend(db: Session = Depends(get_db), current_user: User = Depends
         }
         for s in sessions
     ]
+
+
+@router.get("/video-trend")
+def video_trend(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sessions = (
+        db.query(ClassSession)
+        .filter(
+            _teacher_filter(db, current_user),
+            ClassSession.source_type == "video",
+            ClassSession.trend_json.isnot(None),
+            ClassSession.trend_json != "",
+        )
+        .order_by(ClassSession.session_time.desc())
+        .limit(1)
+        .all()
+    )
+    if not sessions:
+        return []
+
+    s = sessions[0]
+    try:
+        trend_data = json.loads(s.trend_json) if s.trend_json else []
+    except Exception:
+        trend_data = []
+
+    return trend_data
 
 
 @router.get("/attendance-trend/filter")

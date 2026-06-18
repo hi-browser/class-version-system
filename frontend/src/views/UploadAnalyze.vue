@@ -3,24 +3,19 @@
     <el-card class="card">
       <template #header>上传课堂图片或视频</template>
       <el-form label-width="100px">
-        <el-form-item label="课程">
-          <el-select v-model="form.course_id" placeholder="请选择课程" style="width:100%">
-            <el-option v-for="c in courses" :key="c.id" :label="c.course_name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="班级">
-          <el-select v-model="form.class_id" placeholder="请选择班级" style="width:100%" @change="onClassChange">
-            <el-option v-for="c in classes" :key="c.id" :label="c.class_name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="应到人数">
-          <el-input-number v-model="form.expected_count" :min="0" />
+        <el-form-item label="上课日期">
+          <el-date-picker v-model="form.analysis_date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width:100%" />
         </el-form-item>
         <el-form-item label="上课时间">
-          <el-date-picker v-model="form.session_time" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width:100%" />
+          <el-select v-model="form.time_slot" placeholder="第几节课" style="width:100%">
+            <el-option v-for="n in 9" :key="n" :label="'第'+n+'节'" :value="n" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="上课地点">
+          <el-input v-model="form.location" placeholder="如：教学楼A301" />
         </el-form-item>
         <el-form-item label="文件">
-          <el-upload drag :auto-upload="false" :limit="1" :on-change="onFileChange">
+          <el-upload ref="uploadRef" drag :auto-upload="false" :limit="1" :on-change="onFileChange">
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">拖拽或点击上传课堂图片/视频</div>
             <template #tip><div class="el-upload__tip">支持 jpg/png/mp4/avi/mov 等格式</div></template>
@@ -51,16 +46,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getCourses, getClasses, uploadAnalyze } from '../api'
+import { uploadAnalyze } from '../api'
 
-const courses = ref([])
-const classes = ref([])
+const uploadRef = ref(null)
 const file = ref(null)
 const loading = ref(false)
 const result = ref(null)
-const form = ref({ course_id: null, class_id: null, expected_count: 0, session_time: '' })
+const form = ref({ analysis_date: '', time_slot: 1, location: '' })
 
 const isImageResult = computed(() => {
   const p = result.value?.result_path || ''
@@ -70,29 +64,26 @@ const isImageResult = computed(() => {
 function onFileChange(uploadFile) {
   file.value = uploadFile.raw
 }
-function onClassChange(id) {
-  const cls = classes.value.find(x => x.id === id)
-  if (cls) form.value.expected_count = cls.expected_count
-}
 async function submit() {
+  if (!form.value.analysis_date) return ElMessage.warning('请选择上课日期')
+  if (!form.value.location) return ElMessage.warning('请输入上课地点')
   if (!file.value) return ElMessage.warning('请先选择文件')
   loading.value = true
+  result.value = null
   try {
     const fd = new FormData()
     fd.append('file', file.value)
-    Object.entries(form.value).forEach(([k, v]) => {
-      if (v !== null && v !== undefined && v !== '') fd.append(k, v)
-    })
+    fd.append('analysis_date', form.value.analysis_date)
+    fd.append('time_slot', form.value.time_slot)
+    fd.append('location', form.value.location)
     result.value = await uploadAnalyze(fd)
     ElMessage.success('分析完成')
+    file.value = null
+    uploadRef.value?.clearFiles()
   } catch (e) {
     ElMessage.error(e.message)
   } finally {
     loading.value = false
   }
 }
-onMounted(async () => {
-  courses.value = await getCourses()
-  classes.value = await getClasses()
-})
 </script>

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.class_session import ClassSession
 from app.models.course import Course
+from app.models.class_group import ClassGroup
 from app.models.user import User
 from app.routers.auth import get_current_user
 from app.schemas.session import SessionOut, SessionUpdate
@@ -15,12 +16,19 @@ router = APIRouter()
 def list_sessions(course_id: int | None = None, class_id: int | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(ClassSession)
     if current_user.role == "teacher":
-        teacher_course_ids = (
-            db.query(Course.id)
-            .filter(Course.teacher_id == current_user.id)
+        teacher_class_ids = (
+            db.query(ClassGroup.id)
+            .filter(ClassGroup.teacher_id == current_user.id)
             .subquery()
         )
-        q = q.filter(ClassSession.course_id.in_(teacher_course_ids))
+        teacher_course_ids = (
+            db.query(Course.id)
+            .filter(Course.class_group_id.in_(teacher_class_ids))
+            .subquery()
+        )
+        q = q.filter(
+            ClassSession.course_id.in_(teacher_course_ids)
+        )
     if course_id:
         q = q.filter(ClassSession.course_id == course_id)
     if class_id:

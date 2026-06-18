@@ -1,4 +1,5 @@
 import pymysql
+import sys
 
 conn = pymysql.connect(
     host="127.0.0.1",
@@ -75,41 +76,83 @@ try:
         cursor.execute("""
             SELECT COUNT(*) FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = 'classroom_vision'
-            AND TABLE_NAME = 'course'
-            AND COLUMN_NAME = 'teacher_id'
-        """)
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("""
-                ALTER TABLE course
-                ADD COLUMN teacher_id INT NULL
-                AFTER teacher_name,
-                ADD CONSTRAINT fk_course_teacher
-                FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
-            """)
-            print("✓ course 表已添加 teacher_id 列")
-        else:
-            print("- course.teacher_id 列已存在，跳过")
-
-        cursor.execute("""
-            SELECT COUNT(*) FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = 'classroom_vision'
             AND TABLE_NAME = 'class_group'
-            AND COLUMN_NAME = 'teacher_id'
+            AND COLUMN_NAME = 'course_name'
         """)
-        if cursor.fetchone()[0] == 0:
+        has_course_name = cursor.fetchone()[0] > 0
+
+        need_rebuild = not has_course_name
+        if has_course_name:
             cursor.execute("""
-                ALTER TABLE class_group
-                ADD COLUMN teacher_id INT NULL
-                AFTER grade,
-                ADD CONSTRAINT fk_class_teacher
-                FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = 'classroom_vision'
+                AND TABLE_NAME = 'class_group'
+                AND COLUMN_NAME = 'teacher_id'
             """)
-            print("✓ class_group 表已添加 teacher_id 列")
-        else:
-            print("- class_group.teacher_id 列已存在，跳过")
+            has_teacher_id = cursor.fetchone()[0] > 0
+            if not has_teacher_id:
+                need_rebuild = True
+                print("\n⚠ class_group 表缺少 teacher_id 列，需要重建...")
+            else:
+                print("- class_group 表已是最新结构，跳过")
+
+        if need_rebuild:
+            print("⚠ 正在重建 class_group / course / class_session 表（旧数据将丢失）")
+            cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+            cursor.execute("DROP TABLE IF EXISTS class_session")
+            cursor.execute("DROP TABLE IF EXISTS course")
+            cursor.execute("DROP TABLE IF EXISTS class_group")
+            cursor.execute("""
+                CREATE TABLE class_group (
+                  id INT PRIMARY KEY AUTO_INCREMENT,
+                  course_name VARCHAR(20) NOT NULL,
+                  teacher_id INT NOT NULL,
+                  student_count INT NOT NULL DEFAULT 0,
+                  CONSTRAINT fk_cg_teacher FOREIGN KEY (teacher_id) REFERENCES users(id)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE course (
+                  id INT PRIMARY KEY AUTO_INCREMENT,
+                  class_group_id INT NULL,
+                  date DATE NOT NULL,
+                  time_slot INT NOT NULL,
+                  location VARCHAR(50) NOT NULL,
+                  CONSTRAINT fk_course_cg FOREIGN KEY (class_group_id) REFERENCES class_group(id) ON DELETE SET NULL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE class_session (
+                  id INT PRIMARY KEY AUTO_INCREMENT,
+                  course_id INT NULL,
+                  class_id INT NULL,
+                  session_time DATETIME NULL,
+                  location VARCHAR(50),
+                  source_type VARCHAR(20) NOT NULL,
+                  source_path VARCHAR(255) NOT NULL,
+                  result_path VARCHAR(255),
+                  expected_count INT NOT NULL DEFAULT 0,
+                  detected_count INT NOT NULL DEFAULT 0,
+                  attendance_rate FLOAT NOT NULL DEFAULT 0,
+                  participation_rate FLOAT NOT NULL DEFAULT 0,
+                  abnormal_rate FLOAT NOT NULL DEFAULT 0,
+                  phone_rate FLOAT NOT NULL DEFAULT 0,
+                  head_down_rate FLOAT NOT NULL DEFAULT 0,
+                  behavior_json TEXT,
+                  trend_json TEXT,
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  CONSTRAINT fk_session_course FOREIGN KEY (course_id) REFERENCES course(id) ON DELETE SET NULL,
+                  CONSTRAINT fk_session_class FOREIGN KEY (class_id) REFERENCES class_group(id) ON DELETE SET NULL
+                )
+            """)
+            cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+            print("✓ class_group / course / class_session 表已重建")
 
     conn.commit()
     print("\n数据库迁移完成！")
-
+except Exception as e:
+    print(f"\n❌ 迁移失败: {e}")
+    conn.rollback()
+    sys.exit(1)
 finally:
     conn.close()

@@ -7,6 +7,7 @@ class SessionOut(BaseModel):
     course_id: Optional[int]
     class_id: Optional[int]
     session_time: Optional[datetime]
+    location: Optional[str]
     source_type: str
     source_path: str
     result_path: Optional[str]

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import axios from 'axios'
 import Dashboard from '../views/Dashboard.vue'
 import SessionHistory from '../views/SessionHistory.vue'
 import CourseManage from '../views/CourseManage.vue'
@@ -25,19 +26,40 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem('token')
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const userStr = localStorage.getItem('user')
+  const user = userStr ? JSON.parse(userStr) : null
 
   if (!to.meta.noAuth && !token) {
     next('/login')
-  } else if (to.meta.noAuth && token) {
-    next('/dashboard')
-  } else if (to.meta.adminOnly && user.role !== 'admin') {
-    next('/dashboard')
-  } else {
-    next()
+    return
   }
+
+  if (to.meta.noAuth && token) {
+    next('/dashboard')
+    return
+  }
+
+  if (!to.meta.noAuth && token) {
+    try {
+      await axios.get('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    } catch {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      next('/login')
+      return
+    }
+  }
+
+  if (to.meta.adminOnly && user?.role !== 'admin') {
+    next('/dashboard')
+    return
+  }
+
+  next()
 })
 
 export default router
