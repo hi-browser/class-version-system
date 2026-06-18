@@ -1,49 +1,75 @@
 import pymysql
+from passlib.context import CryptContext
+from datetime import date, timedelta
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+admin_password_hash = pwd_context.hash("admin123")
 
 conn = pymysql.connect(
     host="127.0.0.1",
     port=3306,
     user="root",
-    password="123456",
+    password="1234",
     database="classroom_vision",
     charset="utf8mb4"
 )
 
 try:
     with conn.cursor() as cursor:
-        # 清空已有数据，避免乱码残留
         cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
         cursor.execute("TRUNCATE TABLE class_session;")
-        cursor.execute("TRUNCATE TABLE behavior_category;")
-        cursor.execute("TRUNCATE TABLE class_group;")
         cursor.execute("TRUNCATE TABLE course;")
+        cursor.execute("TRUNCATE TABLE class_group;")
+        cursor.execute("TRUNCATE TABLE behavior_category;")
+        cursor.execute("TRUNCATE TABLE users;")
         cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
 
-        # 插入课程
+        cursor.execute(
+            """
+            INSERT INTO users(email, name, password_hash, role, is_verified)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            ("admin@example.com", "系统管理员", admin_password_hash, "admin", True)
+        )
+
+        teacher1_pwd = pwd_context.hash("123456")
         cursor.executemany(
             """
-            INSERT INTO course(course_name, teacher_name, description)
+            INSERT INTO users(email, name, password_hash, role, is_verified)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            [
+                ("zhang@example.com", "张老师", teacher1_pwd, "teacher", True),
+                ("li@example.com", "李老师", teacher1_pwd, "teacher", True),
+            ]
+        )
+        teacher_ids = [cursor.lastrowid - 1, cursor.lastrowid]
+
+        cursor.executemany(
+            """
+            INSERT INTO class_group(course_name, teacher_id, student_count)
             VALUES (%s, %s, %s)
             """,
             [
-                ("计算机视觉导论", "张老师", "智慧课堂测试课程"),
-                ("人工智能基础", "李老师", "课堂行为统计演示课程"),
+                ("高等数学", teacher_ids[0], 45),
+                ("人工智能基础", teacher_ids[1], 50),
             ]
         )
 
-        # 插入班级
+        today = date.today()
         cursor.executemany(
             """
-            INSERT INTO class_group(class_name, expected_count, major, grade)
+            INSERT INTO course(class_group_id, date, time_slot, location)
             VALUES (%s, %s, %s, %s)
             """,
             [
-                ("软件工程2301班", 45, "软件工程", "2023级"),
-                ("人工智能2302班", 50, "人工智能", "2023级"),
+                (1, today + timedelta(days=1), 1, "教学楼A301"),
+                (1, today + timedelta(days=1), 3, "教学楼A301"),
+                (2, today + timedelta(days=2), 2, "教学楼B205"),
+                (2, today + timedelta(days=2), 4, "教学楼B205"),
             ]
         )
 
-        # 插入行为类别
         cursor.executemany(
             """
             INSERT INTO behavior_category(class_id, code, name_cn, is_positive)
@@ -60,7 +86,10 @@ try:
         )
 
     conn.commit()
-    print("数据库中文初始化数据修复完成。")
+    print("数据库初始化数据修复完成。")
+    print("默认管理员账号: admin@example.com / admin123")
+    print("教师账号: zhang@example.com / 123456  |  li@example.com / 123456")
+    print("示例排课: 高等数学(张老师) 明天第1/3节 A301 | 人工智能基础(李老师) 后天第2/4节 B205")
 
 finally:
     conn.close()

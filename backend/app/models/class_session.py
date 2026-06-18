@@ -8,8 +8,9 @@ class ClassSession(Base):
     course_id = Column(Integer, ForeignKey("course.id"), nullable=True)
     class_id = Column(Integer, ForeignKey("class_group.id"), nullable=True)
     session_time = Column(DateTime, nullable=True)
+    location = Column(String(50), nullable=True)
 
-    source_type = Column(String(20), nullable=False)  # image/video
+    source_type = Column(String(20), nullable=False)
     source_path = Column(String(255), nullable=False)
     result_path = Column(String(255), nullable=True)
     result_video_path = Column(String(255), nullable=True)

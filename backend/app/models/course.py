@@ -1,11 +1,11 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, func
+from sqlalchemy import Column, Integer, String, Date, ForeignKey
 from app.core.database import Base
 
 class Course(Base):
     __tablename__ = "course"
 
     id = Column(Integer, primary_key=True, index=True)
-    course_name = Column(String(100), nullable=False)
-    teacher_name = Column(String(100), nullable=True)
-    description = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
+    class_group_id = Column(Integer, ForeignKey("class_group.id"), nullable=True)
+    date = Column(Date, nullable=False)
+    time_slot = Column(Integer, nullable=False)
+    location = Column(String(50), nullable=False)

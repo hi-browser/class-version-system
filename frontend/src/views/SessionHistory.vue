@@ -17,7 +17,7 @@
           <el-button type="primary" size="small" @click="showDetail(row)">
             查看详情
           </el-button>
-          <el-button type="danger" size="small" @click="remove(row.id)">
+          <el-button v-if="isAdmin" type="danger" size="small" @click="remove(row.id)">
             删除
           </el-button>
         </template>
@@ -85,7 +85,11 @@
 </template>
 
 <script setup>
+<<<<<<< HEAD
 import { ref, computed, onMounted, nextTick } from 'vue'
+=======
+import { ref, onMounted, computed } from 'vue'
+>>>>>>> gitee/ysy-frontend-checkversiontest
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getSessions, deleteSession, getSessionAnalysis } from '../api'
 import EChart from '../components/EChart.vue'
@@ -102,6 +106,11 @@ const BEHAVIOR_NAMES = {
 const rows = ref([])
 const detailVisible = ref(false)
 const detail = ref(null)
+
+const isAdmin = computed(() => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  return user.role === 'admin'
+})
 
 async function load() {
   rows.value = await getSessions()

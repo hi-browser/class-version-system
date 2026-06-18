@@ -7,22 +7,35 @@ DROP TABLE IF EXISTS class_session;
 DROP TABLE IF EXISTS behavior_category;
 DROP TABLE IF EXISTS class_group;
 DROP TABLE IF EXISTS course;
+DROP TABLE IF EXISTS users;
+
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(128) NOT NULL,
+  name VARCHAR(64) NOT NULL DEFAULT '',
+  password_hash VARCHAR(256) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'teacher',
+  is_verified BOOLEAN DEFAULT FALSE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_email (email),
+  UNIQUE KEY uq_email_role (email, role)
+);
 
 CREATE TABLE course (
   id INT PRIMARY KEY AUTO_INCREMENT,
-  course_name VARCHAR(100) NOT NULL,
-  teacher_name VARCHAR(100),
-  description TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  class_group_id INT NULL,
+  date DATE NOT NULL,
+  time_slot INT NOT NULL,
+  location VARCHAR(50) NOT NULL,
+  CONSTRAINT fk_course_cg FOREIGN KEY (class_group_id) REFERENCES class_group(id) ON DELETE SET NULL
 );
 
 CREATE TABLE class_group (
   id INT PRIMARY KEY AUTO_INCREMENT,
-  class_name VARCHAR(100) NOT NULL,
-  expected_count INT NOT NULL DEFAULT 0,
-  major VARCHAR(100),
-  grade VARCHAR(50),
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  course_name VARCHAR(20) NOT NULL,
+  teacher_id INT NOT NULL,
+  student_count INT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_cg_teacher FOREIGN KEY (teacher_id) REFERENCES users(id)
 );
 
 CREATE TABLE behavior_category (
@@ -39,6 +52,7 @@ CREATE TABLE class_session (
   course_id INT NULL,
   class_id INT NULL,
   session_time DATETIME NULL,
+  location VARCHAR(50),
   source_type VARCHAR(20) NOT NULL,
   source_path VARCHAR(255) NOT NULL,
   result_path VARCHAR(255),
@@ -56,13 +70,6 @@ CREATE TABLE class_session (
   CONSTRAINT fk_session_class FOREIGN KEY (class_id) REFERENCES class_group(id) ON DELETE SET NULL
 );
 
-INSERT INTO course(course_name, teacher_name, description) VALUES
-('计算机视觉导论', '张老师', '智慧课堂测试课程'),
-('人工智能基础', '李老师', '课堂行为统计演示课程');
-
-INSERT INTO class_group(class_name, expected_count, major, grade) VALUES
-('软件工程2301班', 45, '软件工程', '2023级'),
-('人工智能2302班', 50, '人工智能', '2023级');
 
 INSERT INTO behavior_category(class_id, code, name_cn, is_positive) VALUES
 (0, 'hand_raising', '举手互动', TRUE),
