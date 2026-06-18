@@ -37,6 +37,7 @@ async def upload_and_analyze(
             source_type=source_type,
             source_path=file_path,
             result_path=result.get("result_path"),
+            result_video_path=result.get("result_video_path"),
             expected_count=expected_count,
             detected_count=result.get("detected_count", 0),
             attendance_rate=result.get("attendance_rate", 0),
@@ -46,6 +47,7 @@ async def upload_and_analyze(
             head_down_rate=result.get("head_down_rate", 0),
             behavior_json=json.dumps(result.get("behavior_counts", []), ensure_ascii=False),
             trend_json=json.dumps(result.get("trend", []), ensure_ascii=False),
+            analysis_text=result.get("analysis_text", ""),
         )
         db.add(obj)
         db.commit()
@@ -53,6 +55,7 @@ async def upload_and_analyze(
 
         result["session_id"] = obj.id
         result["source_path"] = file_path
+        result["source_type"] = source_type
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

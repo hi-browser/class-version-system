@@ -10,6 +10,7 @@ class SessionOut(BaseModel):
     source_type: str
     source_path: str
     result_path: Optional[str]
+    result_video_path: Optional[str]
     expected_count: int
     detected_count: int
     attendance_rate: float

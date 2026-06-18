@@ -12,6 +12,7 @@ class ClassSession(Base):
     source_type = Column(String(20), nullable=False)  # image/video
     source_path = Column(String(255), nullable=False)
     result_path = Column(String(255), nullable=True)
+    result_video_path = Column(String(255), nullable=True)
 
     expected_count = Column(Integer, nullable=False, default=0)
     detected_count = Column(Integer, nullable=False, default=0)
@@ -24,5 +25,6 @@ class ClassSession(Base):
 
     behavior_json = Column(Text, nullable=True)
     trend_json = Column(Text, nullable=True)
+    analysis_text = Column(Text, nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())

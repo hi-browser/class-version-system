@@ -13,6 +13,7 @@ let chart = null
 function render() {
   if (!chartRef.value) return
   if (!chart) chart = echarts.init(chartRef.value)
+  chart.resize()
   chart.setOption(props.option)
 }
 

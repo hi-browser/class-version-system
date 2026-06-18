@@ -21,7 +21,9 @@ except Exception:
 class ClassroomAnalyzer:
     def __init__(self):
         self.model = None
+        self._person_model = None
         self.model_path = Path(settings.MODEL_PATH)
+        self._person_model_path = Path(settings.PERSON_MODEL_PATH)
         self.result_dir = Path(settings.RESULT_DIR)
         self.result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -36,6 +38,83 @@ class ClassroomAnalyzer:
             self.model = YOLO(str(self.model_path))
         return self.model
 
+    def _load_person_model(self):
+        if settings.MOCK_ANALYSIS:
+            return None
+        if YOLO is None:
+            raise RuntimeError("未安装 ultralytics")
+        if self._person_model_path.exists():
+            if self._person_model is None:
+                self._person_model = YOLO(str(self._person_model_path))
+            return self._person_model
+        return None
+
+    def _detect_persons(self, image: np.ndarray) -> List[tuple]:
+        person_model = self._load_person_model()
+        if person_model is None:
+            return []
+        results = person_model.predict(source=image, conf=settings.PERSON_CONF_THRESHOLD, save=False, verbose=False)
+        boxes = []
+        for r in results:
+            if r.boxes is None:
+                continue
+            for box in r.boxes:
+                x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+                conf = float(box.conf[0].item())
+                boxes.append((x1, y1, x2, y2, conf))
+        return boxes
+
+    def _classify_crop(self, crop: np.ndarray) -> tuple:
+        behavior_model = self._load_model()
+        if crop.shape[0] < 10 or crop.shape[1] < 10:
+            return (None, 0)
+        results = behavior_model.predict(source=crop, conf=settings.CONF_THRESHOLD, save=False, verbose=False)
+        best_cls = None
+        best_conf = 0
+        for r in results:
+            if r.boxes is None:
+                continue
+            for box in r.boxes:
+                cls_id = int(box.cls[0].item())
+                conf = float(box.conf[0].item())
+                if conf > best_conf:
+                    best_conf = conf
+                    best_cls = cls_id
+        return (best_cls, best_conf)
+
+    def _process_frame(self, image: np.ndarray, frame_index: int = 0) -> tuple:
+        person_boxes = self._detect_persons(image)
+        if not person_boxes:
+            return (image, {}, [])
+
+        behavior_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
+        detections = []
+
+        for (x1, y1, x2, y2, person_conf) in person_boxes:
+            x1_c = max(0, x1)
+            y1_c = max(0, y1)
+            x2_c = min(image.shape[1], x2)
+            y2_c = min(image.shape[0], y2)
+            crop = image[y1_c:y2_c, x1_c:x2_c]
+            if crop.size == 0:
+                continue
+
+            cls_id, cls_conf = self._classify_crop(crop)
+            if cls_id is None:
+                continue
+
+            behavior_counts[str(cls_id)] = behavior_counts.get(str(cls_id), 0) + 1
+            detections.append({
+                "class_id": cls_id,
+                "class_name": CLASS_NAMES.get(cls_id, f"class_{cls_id}"),
+                "name_cn": CLASS_CN.get(cls_id, f"类别{cls_id}"),
+                "confidence": round(cls_conf, 4),
+                "bbox": [x1, y1, x2, y2],
+            })
+            self._draw_box(image, x1, y1, x2, y2, CLASS_CN.get(cls_id, str(cls_id)), cls_conf)
+
+        return (image, behavior_counts, detections)
+
     def analyze_file(self, file_path: str, source_type: str, expected_count: int = 0) -> Dict[str, Any]:
         if settings.MOCK_ANALYSIS:
             if source_type == "video":
@@ -47,32 +126,11 @@ class ClassroomAnalyzer:
         return self.analyze_image(file_path, expected_count)
 
     def analyze_image(self, image_path: str, expected_count: int = 0) -> Dict[str, Any]:
-        model = self._load_model()
         image = cv2.imread(image_path)
         if image is None:
             raise RuntimeError("图片读取失败")
 
-        results = model.predict(source=image_path, conf=settings.CONF_THRESHOLD, save=False, verbose=False)
-        detections = []
-        behavior_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
-
-        for r in results:
-            boxes = r.boxes
-            if boxes is None:
-                continue
-            for box in boxes:
-                cls_id = int(box.cls[0].item())
-                conf = float(box.conf[0].item())
-                x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
-                detections.append({
-                    "class_id": cls_id,
-                    "class_name": CLASS_NAMES.get(cls_id, f"class_{cls_id}"),
-                    "name_cn": CLASS_CN.get(cls_id, f"类别{cls_id}"),
-                    "confidence": round(conf, 4),
-                    "bbox": [x1, y1, x2, y2],
-                })
-                behavior_counts[str(cls_id)] = behavior_counts.get(str(cls_id), 0) + 1
-                self._draw_box(image, x1, y1, x2, y2, CLASS_CN.get(cls_id, str(cls_id)), conf)
+        _, behavior_counts, detections = self._process_frame(image)
 
         result_path = self._save_result_image(image, image_path)
         return self._build_summary(
@@ -84,17 +142,20 @@ class ClassroomAnalyzer:
         )
 
     def analyze_video(self, video_path: str, expected_count: int = 0) -> Dict[str, Any]:
-        model = self._load_model()
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise RuntimeError("视频读取失败")
 
         fps = cap.get(cv2.CAP_PROP_FPS) or 25
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         interval = max(1, int(fps * settings.FRAME_INTERVAL_SECONDS))
         frame_index = 0
         trend = []
         total_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
         first_result_path = None
+        sampled_frames = 0
+        annotated_frames = []
 
         while True:
             ok, frame = cap.read()
@@ -104,24 +165,13 @@ class ClassroomAnalyzer:
                 frame_index += 1
                 continue
 
-            temp_path = self.result_dir / f"temp_frame_{Path(video_path).stem}_{frame_index}.jpg"
-            cv2.imwrite(str(temp_path), frame)
-            results = model.predict(source=str(temp_path), conf=settings.CONF_THRESHOLD, save=False, verbose=False)
-
-            frame_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
-            for r in results:
-                boxes = r.boxes
-                if boxes is None:
-                    continue
-                for box in boxes:
-                    cls_id = int(box.cls[0].item())
-                    conf = float(box.conf[0].item())
-                    x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
-                    frame_counts[str(cls_id)] = frame_counts.get(str(cls_id), 0) + 1
-                    self._draw_box(frame, x1, y1, x2, y2, CLASS_CN.get(cls_id, str(cls_id)), conf)
+            sampled_frames += 1
+            frame, frame_counts, _ = self._process_frame(frame, frame_index)
 
             for k, v in frame_counts.items():
                 total_counts[k] = total_counts.get(k, 0) + v
+
+            annotated_frames.append(frame.copy())
 
             frame_total = sum(frame_counts.values())
             time_sec = round(frame_index / fps, 2)
@@ -131,34 +181,45 @@ class ClassroomAnalyzer:
                 "participation_rate": self._rate(sum(frame_counts.get(str(i), 0) for i in POSITIVE_CLASSES), frame_total),
                 "abnormal_rate": self._rate(sum(frame_counts.get(str(i), 0) for i in ABNORMAL_CLASSES), frame_total),
                 "phone_rate": self._rate(sum(frame_counts.get(str(i), 0) for i in PHONE_CLASSES), frame_total),
+                "behaviors": {
+                    str(cls_id): frame_counts.get(str(cls_id), 0)
+                    for cls_id in CLASS_NAMES.keys()
+                },
             })
 
             if first_result_path is None:
                 first_result_path = self._save_result_image(frame, video_path, suffix=f"frame_{frame_index}")
 
-            try:
-                temp_path.unlink()
-            except Exception:
-                pass
             frame_index += 1
 
         cap.release()
 
-        # 视频的行为总数按抽样帧累加；课堂人数取抽样帧平均检测人数。
+        result_video_path = None
+        if annotated_frames:
+            result_video_path = self._save_result_video(annotated_frames, video_path, fps, width, height, frame_repeat=interval)
+
         if trend:
             avg_count = round(sum(item["detected_count"] for item in trend) / len(trend))
         else:
             avg_count = 0
 
+        avg_counts = {str(i): 0 for i in CLASS_NAMES.keys()}
+        if sampled_frames > 0:
+            for k, v in total_counts.items():
+                avg_counts[k] = round(v / sampled_frames)
+        else:
+            avg_counts = total_counts
+
         summary = self._build_summary(
             expected_count=expected_count,
-            behavior_counts=total_counts,
+            behavior_counts=avg_counts,
             result_path=first_result_path,
             detections=[],
             trend=trend
         )
         summary["detected_count"] = avg_count
         summary["attendance_rate"] = self._rate(avg_count, expected_count)
+        summary["result_video_path"] = result_video_path
         return summary
 
     def _build_summary(self, expected_count: int, behavior_counts: Dict[str, int], result_path: str, detections: List[Dict], trend: List[Dict]) -> Dict[str, Any]:
@@ -191,7 +252,57 @@ class ClassroomAnalyzer:
             "detections": detections,
             "trend": trend,
             "result_path": result_path,
+            "analysis_text": self._generate_analysis(
+                expected_count=expected_count,
+                detected_count=total,
+                attendance_rate=self._rate(total, expected_count),
+                participation_rate=self._rate(positive, total),
+                abnormal_rate=self._rate(abnormal, total),
+                phone_rate=self._rate(phone, total),
+                head_down_rate=self._rate(head_down, total),
+                behavior_counts=behavior_list,
+            ),
         }
+
+    def _generate_analysis(self, expected_count, detected_count, attendance_rate, participation_rate, abnormal_rate, phone_rate, head_down_rate, behavior_counts):
+        parts = []
+
+        if attendance_rate >= 90:
+            parts.append(f"本次课堂检测到 {detected_count} 人，到课率为 {attendance_rate}%，出勤情况良好。")
+        elif attendance_rate >= 75:
+            parts.append(f"本次课堂检测到 {detected_count} 人，到课率为 {attendance_rate}%，出勤情况基本正常，但仍有提升空间。")
+        else:
+            parts.append(f"本次课堂检测到 {detected_count} 人，到课率为 {attendance_rate}%，出勤率偏低，建议重点关注缺勤情况。")
+
+        if participation_rate >= 60:
+            parts.append(f"课堂参与率为 {participation_rate}%，学生互动参与度较高。")
+        elif participation_rate >= 40:
+            parts.append(f"课堂参与率为 {participation_rate}%，学生参与度中等，建议适当增加提问或讨论环节。")
+        else:
+            parts.append(f"课堂参与率为 {participation_rate}%，课堂活跃度偏低，建议加强互动引导。")
+
+        if abnormal_rate >= 30:
+            parts.append(f"异常行为率为 {abnormal_rate}%，课堂分心现象较明显，需重点关注手机使用、低头、趴桌等行为。")
+        elif abnormal_rate >= 15:
+            parts.append(f"异常行为率为 {abnormal_rate}%，存在一定分心现象，建议加强巡视提醒。")
+        else:
+            parts.append(f"异常行为率为 {abnormal_rate}%，课堂纪律整体较稳定。")
+
+        if phone_rate > 0:
+            parts.append(f"手机使用率为 {phone_rate}%，需留意学生是否在课堂上使用手机。")
+        if head_down_rate > 0:
+            parts.append(f"低头/趴桌率为 {head_down_rate}%，建议关注后排学生状态。")
+
+        sorted_behaviors = sorted(behavior_counts, key=lambda x: x["count"], reverse=True)
+        if sorted_behaviors:
+            top = sorted_behaviors[0]
+            if top["count"] > 0:
+                top_name = top['name']
+                parts.append(f"行为分布中「{top_name}」出现最多，共 {top['count']} 次，占比 {top['rate']}%。")
+
+        parts.append("综合建议：关注后排和角落区域学生状态，通过课堂互动、巡视提醒和任务驱动方式提升课堂参与度。")
+
+        return "".join(parts)
 
     def _mock_image_result(self, file_path: str, expected_count: int = 0):
         result_path = self._copy_as_result(file_path)
@@ -228,10 +339,15 @@ class ClassroomAnalyzer:
                 "participation_rate": self._rate(frame_counts["0"] + frame_counts["1"] + frame_counts["2"], total),
                 "abnormal_rate": self._rate(frame_counts["3"] + frame_counts["4"] + frame_counts["5"], total),
                 "phone_rate": self._rate(frame_counts["3"], total),
+                "behaviors": {
+                    str(cls_id): frame_counts.get(str(cls_id), 0)
+                    for cls_id in CLASS_NAMES.keys()
+                },
             })
         summary = self._build_summary(expected_count, total_counts, result_path, [], trend)
         summary["detected_count"] = round(sum(x["detected_count"] for x in trend) / len(trend))
         summary["attendance_rate"] = self._rate(summary["detected_count"], expected_count)
+        summary["result_video_path"] = None
         return summary
 
     def _get_chinese_font(self, size=20):
@@ -280,6 +396,18 @@ class ClassroomAnalyzer:
         filename = f"{p.stem}_{suffix}.jpg"
         out = self.result_dir / filename
         cv2.imwrite(str(out), image)
+        return f"static/results/{filename}"
+
+    def _save_result_video(self, frames: list, source_path: str, fps: float, width: int, height: int, frame_repeat: int = 1):
+        p = Path(source_path)
+        filename = f"{p.stem}_annotated.mp4"
+        out = self.result_dir / filename
+        fourcc = cv2.VideoWriter_fourcc(*"avc1")
+        writer = cv2.VideoWriter(str(out), fourcc, fps, (width, height))
+        for frame in frames:
+            for _ in range(frame_repeat):
+                writer.write(frame)
+        writer.release()
         return f"static/results/{filename}"
 
     def _copy_as_result(self, source_path: str, suffix="result"):

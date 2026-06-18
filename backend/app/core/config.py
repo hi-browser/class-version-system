@@ -16,9 +16,11 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "app/static/uploads"
     RESULT_DIR: str = "app/static/results"
     MODEL_PATH: str = "weights/scb_yolo.pt"
+    PERSON_MODEL_PATH: str = "weights/person_yolo.pt"
     MOCK_ANALYSIS: bool = True
     FRAME_INTERVAL_SECONDS: int = 2
     CONF_THRESHOLD: float = 0.25
+    PERSON_CONF_THRESHOLD: float = 0.25
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

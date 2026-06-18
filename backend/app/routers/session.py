@@ -48,6 +48,7 @@ def get_session_analysis(session_id: int, db: Session = Depends(get_db)):
         "source_type": obj.source_type,
         "source_path": obj.source_path,
         "result_path": obj.result_path,
+        "result_video_path": obj.result_video_path,
         "expected_count": obj.expected_count,
         "detected_count": obj.detected_count,
         "attendance_rate": obj.attendance_rate,
@@ -57,6 +58,7 @@ def get_session_analysis(session_id: int, db: Session = Depends(get_db)):
         "head_down_rate": obj.head_down_rate,
         "behavior_counts": behavior_counts,
         "trend": trend,
+        "analysis_text": obj.analysis_text or "",
         "created_at": obj.created_at,
     }
 
@@ -115,11 +117,13 @@ def delete_session(session_id: int, db: Session = Depends(get_db)):
 
     source_path = obj.source_path
     result_path = obj.result_path
+    result_video_path = obj.result_video_path
 
     db.delete(obj)
     db.commit()
 
     _safe_delete_file(source_path)
     _safe_delete_file(result_path)
+    _safe_delete_file(result_video_path)
 
     return {"message": "删除成功"}

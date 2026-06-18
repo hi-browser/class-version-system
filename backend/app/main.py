@@ -1,14 +1,56 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.database import Base, engine, SessionLocal
+from app.models.course import Course
+from app.models.class_group import ClassGroup
+from app.models.behavior_category import BehaviorCategory
 from app.routers import course, class_group, session, upload, statistics, behavior_category
 
-Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title=settings.APP_NAME)
+def init_database():
+    Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        if db.query(Course).count() == 0:
+            db.add_all([
+                Course(course_name="计算机视觉导论", teacher_name="张老师", description="智慧课堂测试课程"),
+                Course(course_name="人工智能基础", teacher_name="李老师", description="课堂行为统计演示课程"),
+            ])
+            db.commit()
+
+        if db.query(ClassGroup).count() == 0:
+            db.add_all([
+                ClassGroup(class_name="软件工程2301班", expected_count=45, major="软件工程", grade="2023级"),
+                ClassGroup(class_name="人工智能2302班", expected_count=50, major="人工智能", grade="2023级"),
+            ])
+            db.commit()
+
+        if db.query(BehaviorCategory).count() == 0:
+            db.add_all([
+                BehaviorCategory(class_id=0, code="hand_raising", name_cn="举手互动", is_positive=True),
+                BehaviorCategory(class_id=1, code="reading", name_cn="阅读/看书", is_positive=True),
+                BehaviorCategory(class_id=2, code="writing", name_cn="低头书写", is_positive=True),
+                BehaviorCategory(class_id=3, code="using_phone", name_cn="使用手机", is_positive=False),
+                BehaviorCategory(class_id=4, code="bowing_head", name_cn="低头状态", is_positive=False),
+                BehaviorCategory(class_id=5, code="leaning_over_table", name_cn="趴桌/疑似睡觉", is_positive=False),
+            ])
+            db.commit()
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_database()
+    yield
+
+
+app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
